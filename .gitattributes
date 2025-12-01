@@ -1,1 +1,1 @@
-manage.py filter=git-crypt diff=git-crypt
+templates/users/profile.html filter=git-crypt diff=git-crypt
