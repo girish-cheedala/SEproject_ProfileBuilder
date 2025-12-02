@@ -1,1 +1,2 @@
 templates/users/profile.html filter=git-crypt diff=git-crypt
+templates/base.html filter=git-crypt diff=git-crypt
