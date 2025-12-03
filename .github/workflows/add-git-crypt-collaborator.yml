@@ -51,8 +51,10 @@ jobs:
           echo "Repository unlocked successfully"
 
       - name: Import Collaborator GPG Public Key
+        env:
+          GPG_PUBLIC_KEY: ${{ inputs.gpg_public_key }}
         run: |
-          echo "${{ inputs.gpg_public_key }}" > /tmp/collaborator-key.gpg
+          printf '%s\n' "$GPG_PUBLIC_KEY" > /tmp/collaborator-key.gpg
           
           gpg --import /tmp/collaborator-key.gpg
           KEY_ID=$(gpg --list-keys --with-colons 2>/dev/null | grep "^fpr" | tail -1 | cut -d: -f10)
