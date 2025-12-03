@@ -1,0 +1,94 @@
+name: Add Git-Crypt Collaborator
+
+on:
+  workflow_dispatch:
+    inputs:
+      gpg_public_key:
+        description: 'GPG Public Key (armored format) - Paste the entire public key'
+        required: true
+        type: string
+      collaborator_email:
+        description: 'Github email of the collaborator (for commit message)'
+        required: true
+        type: string
+
+jobs:
+  add-git-crypt-user:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: 'write'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup GPG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg git-crypt
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "kiira97115@gmail.com"
+
+      - name: Import Git-Crypt Master Key
+        env:
+          GIT_CRYPT_MASTER_KEY: ${{ secrets.GIT_CRYPT_MASTER_KEY }}
+        run: |
+          if [ -z "$GIT_CRYPT_MASTER_KEY" ]; then
+            echo "ERROR: GIT_CRYPT_MASTER_KEY secret is not set"
+            exit 1
+          fi
+          
+          # Decode base64-encoded master key and write to file
+          echo "$GIT_CRYPT_MASTER_KEY" | base64 -d > /tmp/master.key
+          git-crypt unlock /tmp/master.key
+          rm -f /tmp/master.key
+          
+          echo "Repository unlocked successfully"
+
+      - name: Import Collaborator GPG Public Key
+        run: |
+          echo "${{ inputs.gpg_public_key }}" > /tmp/collaborator-key.gpg
+          
+          gpg --import /tmp/collaborator-key.gpg
+          KEY_ID=$(gpg --list-keys --with-colons 2>/dev/null | grep "^fpr" | tail -1 | cut -d: -f10)
+          if [ -z "$KEY_ID" ]; then
+            echo "ERROR: Failed to extract GPG key ID"
+            exit 1
+          fi
+          
+          echo "KEY_ID=$KEY_ID" >> $GITHUB_ENV
+          echo "Imported GPG key with ID: $KEY_ID"
+          
+          # Clean up
+          rm -f /tmp/collaborator-key.gpg
+
+      - name: Add User to Git-Crypt
+        run: |
+          if [ -z "$KEY_ID" ]; then
+            echo "ERROR: KEY_ID is not set"
+            exit 1
+          fi
+          
+          # Add the GPG user to git-crypt
+          git-crypt add-gpg-user --trusted "$KEY_ID" || {
+            echo "ERROR: Failed to add GPG user to git-crypt"
+            exit 1
+          }
+          
+          echo "Successfully added GPG user $KEY_ID to git-crypt"
+
+      - name: Stage and Push Changes
+        run: |
+          git add .git-crypt
+          git commit -m "Add git-crypt collaborator: ${{ inputs.collaborator_email }}"
+          git remote set-url origin https://${{ github.actor }}:${{ secrets.GIT_PAT }}@github.com/${{ github.repository }}.git
+          git pull origin ${{ github.ref_name }} --rebase || true
+          git push origin ${{ github.ref_name }}
+
+          echo "Successfully Committed and Pushed Changes"
+
