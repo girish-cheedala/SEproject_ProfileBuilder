@@ -77,19 +77,22 @@ jobs:
             exit 1
           fi
           
-          # Add the GPG user to git-crypt
+          # Add the GPG user to git-crypt (this automatically creates a commit)
           git-crypt add-gpg-user --trusted "$KEY_ID" || {
             echo "ERROR: Failed to add GPG user to git-crypt"
             exit 1
           }
           
+          # Amend the commit message to include the collaborator's email
+          git commit --amend -m "Add git-crypt collaborator: ${{ inputs.collaborator_email }}"
+          
           echo "Successfully added GPG user $KEY_ID to git-crypt"
 
       - name: Stage and Push Changes
         run: |
-          git add .git-crypt
-          git commit -m "Add git-crypt collaborator: ${{ inputs.collaborator_email }}"
           git remote set-url origin https://${{ github.actor }}:${{ secrets.GIT_PAT }}@github.com/${{ github.repository }}.git
+          
+          # Pull latest changes and push
           git pull origin ${{ github.ref_name }} --rebase || true
           git push origin ${{ github.ref_name }}
 
